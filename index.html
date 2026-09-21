@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Grammar Checker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom scrollbar for text areas */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f8fafc;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        
+        /* Spinner animation */
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid white;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .shimmer {
+            background: #f6f7f8;
+            background-image: linear-gradient(to right, #f6f7f8 0%, #edeef1 20%, #f6f7f8 40%, #f6f7f8 100%);
+            background-repeat: no-repeat;
+            background-size: 800px 100%; 
+            animation-duration: 1.5s;
+            animation-fill-mode: forwards; 
+            animation-iteration-count: infinite;
+            animation-name: placeholderShimmer;
+            animation-timing-function: linear;
+        }
+        
+        @keyframes placeholderShimmer {
+            0% { background-position: -468px 0; }
+            100% { background-position: 468px 0; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800 flex flex-col">
+
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-emerald-500 text-white p-2 rounded-lg shadow-sm">
+                    <i class="fa-solid fa-spell-check text-xl"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">GrammarAI</h1>
+            </div>
+            <p class="text-sm text-slate-500 hidden sm:block font-medium">Powered by Gemini</p>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-6xl mx-auto w-full px-4 py-8 flex flex-col gap-6">
+        
+        <!-- Header Text -->
+        <div class="text-center max-w-2xl mx-auto mb-4">
+            <h2 class="text-3xl font-bold text-slate-800 mb-2">Write with Confidence</h2>
+            <p class="text-slate-500">Paste your text below to instantly fix grammar, spelling, and punctuation errors using advanced AI.</p>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-6 h-[500px]">
+            
+            <section class="w-full lg:w-1/2 flex flex-col gap-3 h-full">
+                <div class="flex items-center justify-between px-1">
+                    <label for="input-text" class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-pen-nib text-slate-400"></i> Original Text
+                    </label>
+                    <button id="clear-btn" class="text-xs text-slate-500 hover:text-red-500 transition-colors font-medium">
+                        Clear text
+                    </button>
+                </div>
+                
+                <div class="relative flex-grow bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition-all">
+                    <textarea id="input-text" class="w-full h-full p-5 resize-none outline-none text-slate-700 leading-relaxed bg-transparent" placeholder="Type or paste your text here to check for grammar and spelling errors..."></textarea>
+                    
+                    <div class="bg-slate-50 border-t border-slate-100 p-3 flex items-center justify-between">
+                        <span id="char-count" class="text-xs font-medium text-slate-400">0 characters</span>
+                        <button id="check-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl font-medium transition-colors flex items-center gap-2 disabled:bg-emerald-400 disabled:cursor-not-allowed shadow-sm">
+                            <span>Check Grammar</span>
+                            <i class="fa-solid fa-arrow-right-long"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="w-full lg:w-1/2 flex flex-col gap-3 h-full relative">
+                <div class="flex items-center justify-between px-1">
+                    <label class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles text-emerald-500"></i> Corrected Text
+                    </label>
+                    <button id="copy-btn" class="text-xs text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1 rounded-lg transition-colors font-medium flex items-center gap-1 opacity-0 pointer-events-none">
+                        <i class="fa-regular fa-copy"></i> Copy
+                    </button>
+                </div>
+                
+                <div class="relative flex-grow bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                    <textarea id="output-text" readonly class="w-full h-full p-5 resize-none outline-none text-slate-800 leading-relaxed bg-transparent" placeholder="Your corrected text will appear here..."></textarea>
+                    
+                    <!-- Loading Overlay -->
+                    <div id="loading-overlay" class="hidden absolute inset-0 bg-white/80 backdrop-blur-[2px] flex flex-col items-center justify-center z-10 p-6">
+                        <!-- Skeleton loading bars -->
+                        <div class="w-full space-y-4">
+                            <div class="h-4 shimmer rounded-full w-3/4"></div>
+                            <div class="h-4 shimmer rounded-full w-full"></div>
+                            <div class="h-4 shimmer rounded-full w-5/6"></div>
+                            <div class="h-4 shimmer rounded-full w-2/3"></div>
+                        </div>
+                        <div class="mt-8 flex items-center gap-3 text-emerald-600 font-medium">
+                            <div class="spinner !border-emerald-200 !border-t-emerald-600"></div>
+                            Analyzing & Correcting...
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        // DOM Elements
+        const inputText = document.getElementById('input-text');
+        const outputText = document.getElementById('output-text');
+        const checkBtn = document.getElementById('check-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const copyBtn = document.getElementById('copy-btn');
+        const charCount = document.getElementById('char-count');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const toastContainer = document.getElementById('toast-container');
+
+        // Update character count
+        inputText.addEventListener('input', () => {
+            const length = inputText.value.length;
+            charCount.textContent = `${length} character${length !== 1 ? 's' : ''}`;
+            
+            // Enable/disable button based on input
+            if (length > 0) {
+                checkBtn.disabled = false;
+            } else {
+                checkBtn.disabled = true;
+            }
+        });
+
+        // Clear text
+        clearBtn.addEventListener('click', () => {
+            inputText.value = '';
+            outputText.value = '';
+            inputText.dispatchEvent(new Event('input'));
+            copyBtn.classList.add('opacity-0', 'pointer-events-none');
+        });
+
+        // Toast Notification System
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            let bgClass = type === 'success' ? 'bg-slate-800' : 'bg-red-500';
+            let iconClass = type === 'success' ? 'fa-check-circle text-emerald-400' : 'fa-circle-exclamation text-white';
+
+            toast.className = `transform transition-all duration-300 translate-x-full opacity-0 ${bgClass} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-sm font-medium border border-slate-700/50`;
+            toast.innerHTML = `<i class="fa-solid ${iconClass} text-lg"></i> <span>${message}</span>`;
+            
+            toastContainer.appendChild(toast);
+
+            setTimeout(() => toast.classList.remove('translate-x-full', 'opacity-0'), 10);
+
+            setTimeout(() => {
+                toast.classList.add('translate-x-full', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Copy to clipboard functionality
+        copyBtn.addEventListener('click', () => {
+            if (!outputText.value) return;
+
+            try {
+                outputText.select();
+                document.execCommand('copy');
+                window.getSelection().removeAllRanges();
+                
+                const originalHtml = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+                copyBtn.classList.replace('text-emerald-600', 'text-slate-700');
+                
+                showToast('Corrected text copied to clipboard!');
+                
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalHtml;
+                    copyBtn.classList.replace('text-slate-700', 'text-emerald-600');
+                }, 2000);
+            } catch (err) {
+                showToast('Failed to copy text.', 'error');
+            }
+        });
+
+        async function checkGrammar(text) {
+            // Set up the API payload
+            const systemPrompt = "Act as an expert copyeditor and grammar checker. Review the following text for grammar, spelling, and punctuation errors. Provide ONLY the corrected text. Do not add any conversational filler, explanations, or quotes around the text. Maintain the original tone and meaning. If the text is already completely correct, return the original text exactly as it was provided.";
+            
+            const payload = {
+                contents: [{ parts: [{ text: text }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                }
+            };
+
+            const apiKey = ""; // Canvas will provide this automatically
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            // Implement exponential backoff for retries
+            const maxRetries = 3;
+            let retryDelay = 1000;
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429) {
+                            throw new Error('Rate limit exceeded');
+                        }
+                        throw new Error(`API error: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    
+                    if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts) {
+                        return result.candidates[0].content.parts[0].text.trim();
+                    } else {
+                        throw new Error("Unexpected API response structure.");
+                    }
+
+                } catch (error) {
+                    if (error.message === 'Rate limit exceeded' && i < maxRetries - 1) {
+                        await new Promise(resolve => setTimeout(resolve, retryDelay));
+                        retryDelay *= 2; // Exponential backoff
+                        continue;
+                    }
+                    console.error("Grammar Check Error:", error);
+                    throw error;
+                }
+            }
+        }
+
+        // Check Button Event Listener
+        checkBtn.addEventListener('click', async () => {
+            const textToProcess = inputText.value.trim();
+            if (!textToProcess) return;
+
+            // UI Loading State
+            const originalBtnHtml = checkBtn.innerHTML;
+            checkBtn.disabled = true;
+            checkBtn.innerHTML = '<div class="spinner"></div><span>Checking...</span>';
+            loadingOverlay.classList.remove('hidden');
+            copyBtn.classList.add('opacity-0', 'pointer-events-none');
+            outputText.value = '';
+
+            try {
+                // Call Gemini API
+                const correctedText = await checkGrammar(textToProcess);
+                
+                // Update UI with result
+                outputText.value = correctedText;
+                
+                // Show copy button
+                if (correctedText) {
+                    copyBtn.classList.remove('opacity-0', 'pointer-events-none');
+                }
+                
+                if (correctedText === textToProcess) {
+                    showToast('No errors found! Your text looks great.');
+                } else {
+                    showToast('Grammar checked successfully.');
+                }
+
+            } catch (error) {
+                outputText.value = "An error occurred while checking the grammar. Please try again later.";
+                showToast("Failed to process text.", "error");
+            } finally {
+                // Restore UI State
+                loadingOverlay.classList.add('hidden');
+                checkBtn.disabled = false;
+                checkBtn.innerHTML = originalBtnHtml;
+            }
+        });
+        
+        // Initialize button state on load
+        inputText.dispatchEvent(new Event('input'));
+    </script>
+</body>
+</html>
